@@ -1,0 +1,3 @@
+free-owl.duckdns.org {
+  reverse_proxy xui:2053
+}

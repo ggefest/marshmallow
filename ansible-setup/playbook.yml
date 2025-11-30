@@ -1,0 +1,71 @@
+---
+- name: Automate Docker, Portainer, Caddy, and 3x-ui setup
+  hosts: vps_servers
+  become: yes # run with superuser (sudo)
+
+  tasks:
+    - name: Update apt cache and upgrade system
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install necessary packages for Docker
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+        state: present
+
+    - name: Install Docker Engine
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+        args:
+          chdir: /tmp
+          creates: /usr/bin/docker
+
+    - name: Install Docker Compose (as plugin)
+      ansible.builtin.pip:
+        name: docker-compose
+        state: present
+
+    - name: Create portainer data volume
+      community.docker.docker_volume:
+        name: portainer_data
+        state: present
+
+    - name: Run Portainer container
+      community.docker.docker_container:
+        name: portainer
+        image: portainer/portainer-ce:latest
+        restart_policy: always
+        ports:
+          - "8000:8000"
+          - "9443:9443"
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - portainer_data:/data
+
+    - name: Create directory for 3x-ui and Caddy
+      ansible.builtin.file:
+        path: /opt/3x-ui
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose.yml file
+      ansible.builtin.copy:
+        src: docker-compose.yml
+        dest: /opt/3x-ui/docker-compose.yml
+
+    - name: Copy Caddyfile file
+      ansible.builtin.copy:
+        src: Caddyfile
+        dest: /opt/3x-ui/Caddyfile
+
+    - name: Start the 3x-ui and Caddy stack
+      community.docker.docker_compose:
+        project_src: /opt/3x-ui
+        state: present
